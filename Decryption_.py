@@ -1,11 +1,10 @@
-from typing import Dict, List
 from PIL import Image
 import hgtk
 import os
 
 
 def kr_dict():
-    j_and_m_dict: List[Dict[str, int]] = [{}, {}, {}]
+
     j_and_m = (
         ('ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ','ㅅ',
          'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', ''), #20
@@ -17,30 +16,16 @@ def kr_dict():
          'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '') #28
     )
 
-    for i in range(3):
-
-        for j in range(len(j_and_m[i])):
-
-            j_and_m_dict[i][j] = j_and_m[i][j]
-
-    return j_and_m_dict
+    return tuple(({j : j_and_m[i][j] for j in range(len(j_and_m[i]))} for i in range(3)))
 
 
 def kr_decrypt(rgb: tuple):
 
     global KR_DICT
 
-    modular = (21, 23, 29)
+    res = [KR_DICT[i][rgb[i] % v] for i, v in enumerate((21, 23, 29))]
 
-    result = [KR_DICT[i][rgb[i] % modular[i]] for i in range(3)]
-
-    if result.count("") == 2:
-
-        for v in result:
-
-            if v != "": return v
-
-    return hgtk.letter.compose(result[0], result[1], result[2])
+    return next(filter(lambda v: v != "", res)) if res.count("") == 2 else hgtk.letter.compose(res[0], res[1], res[2])
 
 
 def en_decrypt(rgb: tuple, criteria: int): return chr(rgb[criteria] % 128)
@@ -99,20 +84,24 @@ def question(ques: str, cond: tuple):
 
         scan = input(ques)
 
-        if scan in cond: break
+        if scan in cond:
+
+            print()
+
+            return scan
 
         print("Please enter a valid value.\n")
 
-    print()
 
-    return scan
+def singular(i_name, DorP, file_tuple: tuple):
 
+    try: i_name = file_tuple[int(i_name)]
 
-def singular(i_name: str, DorP):
+    except ValueError: pass
 
     will = decrypt_process(i_name)
 
-    if will[:-4] == i_name[:-4]:
+    if will[:will.rindex(".")] == i_name[:i_name.rindex(".")]:
 
         print("A file that matches both the name and extension\n"
               "of the decryption target exists in this folder.\n"
@@ -123,15 +112,29 @@ def singular(i_name: str, DorP):
     if DorP == "D": os.remove(rf"{i_name}")
 
 
+def file_tuple(listdir):
+
+    file_tuple = tuple((v for v in listdir if v[-3:] == "bmp"))
+
+    print(f"\n{'List Of Bitmap Files In The Current Directory':=^80}\n")
+
+    for i, v in enumerate(file_tuple): print(f"  [{i:0>3}] : {v}")
+
+    print(f"\n{'END':=^80}\n")
+
+    return file_tuple
+
+
 if __name__ == '__main__':
 
     KR_DICT = kr_dict()
+    listdir = os.listdir(".")
 
-    print("[DECRYPTION]")
+    print(f"\n{'[DECRYPTION]':^61}")
 
-    singular(question("file name : ", tuple(os.listdir("."))),
-             question("What about the remaining bitmap file after decoding?\n[D]elete OR [P]reserve : ", ("D", "P")))
+    file_tuple = file_tuple(listdir)
 
-    print('\nSuccessfully.')
+    singular(question("file name(or number) : ", file_tuple + tuple((str(i) for i in range(len(file_tuple))))),
+             question("What about the remaining bitmap file after decoding?\n[D]elete OR [P]reserve : ", ("D", "P")), file_tuple)
 
-    input('\nIf you want to quit, press any button. ')
+    input("\nSuccessfully.\n\nIf you want to quit, press any button. ")

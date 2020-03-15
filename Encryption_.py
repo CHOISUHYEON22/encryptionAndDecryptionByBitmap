@@ -1,4 +1,3 @@
-from typing import Dict, List
 from random import randint, sample
 from PIL import Image
 import shutil
@@ -15,8 +14,6 @@ class IncorrectSizingError(Exception):
 
 def build_size(plain: str, length: int, length_name: int):
 
-    def size_control(plain, length):  return plain + "@", length + 1
-
     while True:
 
         try:
@@ -31,13 +28,13 @@ def build_size(plain: str, length: int, length_name: int):
 
             else: break
 
-        except Warning: plain, length = size_control(plain, length)
+        except Warning: plain, length = plain + "@", length + 1
 
     return plain, aliquot[-1] + 1, length // aliquot[-1] + 2
 
 
 def kr_dict():
-    j_and_m_dict: List[Dict[str, int]] = [{}, {}, {}]
+
     j_and_m = (
         ('ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ','ㅅ',
          'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', ''), #20
@@ -49,13 +46,7 @@ def kr_dict():
          'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '') #28
     )
 
-    for i in range(3):
-
-        for j in range(len(j_and_m[i])):
-
-            j_and_m_dict[i][j_and_m[i][j]] = j
-
-    return j_and_m_dict
+    return tuple(({j_and_m[i][j] : j for j in range(len(j_and_m[i]))} for i in range(3)))
 
 def kr_encrypt(char: str):
 
@@ -65,7 +56,7 @@ def kr_encrypt(char: str):
 
     char_tuple = hgtk.letter.decompose(char)
 
-    return tuple([randint(1, Range[i][0]) * Range[i][1] + KR_DICT[i][char_tuple[i]] for i in range(3)])
+    return tuple((randint(1, Range[i][0]) * Range[i][1] + KR_DICT[i][char_tuple[i]] for i in range(3)))
 
 
 def en_encrypt(char: str): return randint(0, 1) * 128 + ord(char)
@@ -77,13 +68,13 @@ def handle_plain(path: str):
 
     try:
 
-        with open("TASK.txt", "rt") as f: plain = f.read().replace("\n", "`")
+        with open("TASK.txt", "rt", encoding="utf-8") as f: plain = f.read().replace("\n", "`")
 
     except UnicodeDecodeError:
 
-        with open("TASK.txt", "rt", encoding="utf-8") as f: plain = f.read().replace("\n", "`")
+        with open("TASK.txt", "rt") as f: plain = f.read().replace("\n", "`")
 
-    os.remove("TASK.txt")
+    os.remove(r"TASK.txt")
 
     if path[0] == ".": path = path[path.rindex("/") + 1:]
 
@@ -93,46 +84,30 @@ def handle_plain(path: str):
 
     data = {"plain" : plain, "name" : name, "ext" : ext}
 
+    insert_str = lambda index: v[:index] + ("뺊뺊" if kr_ing else "$$") + v[index:]
+
     for k in data.keys():
 
-        index = [[], []]
-        kr_ing = False
-        count = 0
+        count, kr_ing, v = 0, False, data[k]
 
-        for i, v in enumerate(data[k]):
+        for i, u in enumerate(data[k]):
 
-            if (not v.isascii() and not kr_ing) or (v.isascii() and kr_ing):
+            if (not u.isascii() and not kr_ing) or (u.isascii() and kr_ing):
 
-                index[int(kr_ing)].append(i + 2 * count)
+                v, kr_ing, count = insert_str(i + 2 * count), not kr_ing, count + 1
 
-                kr_ing = not kr_ing
+        if kr_ing: v += "뺊뺊"
 
-                count += 1
-
-        try:
-
-            for i in range(len(index[0])):
-
-                for j, v in ((0, "$$"), (1, "뺊뺊")):
-
-                    data[k] = data[k][:index[j][i]] + v + data[k][index[j][i]:]
-
-        except IndexError: data[k] += "뺊뺊"
+        data[k] = v
 
     return tuple(data.values())
 
 
 def encrypt_process(plain: str, name_ext: tuple, file_name):
 
-    def index(): return (width - 1) * (i - 2) + j - 1
+    get_rand = lambda set=randint(0, 255), i=0: tuple((set if j == i else randint(0, 255) for j in range(3)))
 
-    def get_rand(set = randint(0, 255), i = 0):
-
-        rand = [randint(0, 255), randint(0, 255)]
-
-        rand.insert(i, set)
-
-        return tuple(rand)
+    index = lambda : (width - 1) * (i - 2) + j - 1
 
     plain, width, height = build_size(plain, len(plain), len(name_ext[0]))
 
@@ -175,40 +150,56 @@ def question(ques: str, cond: tuple):
 
         scan = input(ques)
 
-        if scan in cond: break
+        if scan in cond:
+
+            print()
+
+            return scan
 
         print("Please enter a valid value.\n")
 
-    print()
 
-    return scan
-
-
-def singular(file_name: str, OorR: str):
-
-    def naming(): return "".join(sample(Range, randint(4, 10)))
+def singular(file_name, OorR: str, file_tuple: tuple):
 
     Range = [chr(i) for i in list(range(65, 91)) + list(range(97, 123))] + \
             ["~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";"]
 
+    try: file_name = file_tuple[int(file_name)]
+
+    except ValueError: pass
+
     plain, name, ext = handle_plain(file_name)
 
-    will = naming() if OorR == "R" else name
+    will = name if OorR == "O" else "".join(sample(Range, randint(4, 10)))
 
     print(f"{file_name} -> {will}.bmp")
 
     encrypt_process(plain, (name, ext), will)
 
 
+def file_tuple(listdir):
+
+    file_tuple = tuple((v for v in listdir if os.path.isfile(v)))
+
+    print(f"\n{' List Of Files In The Current Directory ':=^61}\n")
+
+    for i, v in enumerate(file_tuple): print(f"  [{i:0>3}] : {v}")
+
+    print(f"\n{' END ':=^61}\n")
+
+    return file_tuple
+
+
 if __name__ == '__main__':
 
     KR_DICT = kr_dict()
+    listdir = os.listdir(".")
 
-    print("[ENCRYPTION]")
+    print(f"\n{'[ENCRYPTION]':^61}")
 
-    singular(question("file name : ", tuple(os.listdir("."))),
-             question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", ("O", "R")))
+    file_tuple = file_tuple(listdir)
 
-    print('\nSuccessfully.')
+    singular(question("file name(or number) : ", file_tuple + tuple((str(i) for i in range(len(file_tuple))))),
+             question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", ("O", "R")), file_tuple)
 
-    input('\nIf you want to quit, press any button. ')
+    input('\nSuccessfully.\n\nIf you want to quit, press any button. ')
