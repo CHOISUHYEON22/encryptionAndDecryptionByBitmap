@@ -48,6 +48,7 @@ def kr_dict():
 
     return tuple(({j_and_m[i][j] : j for j in range(len(j_and_m[i]))} for i in range(3)))
 
+
 def kr_encrypt(char: str):
 
     global KR_DICT
@@ -62,23 +63,25 @@ def kr_encrypt(char: str):
 def en_encrypt(char: str): return randint(0, 1) * 128 + ord(char)
 
 
-def handle_plain(path: str):
+def handle_plain(file_name: str, path: str):
 
-    shutil.copy(path, "TASK.txt")
+    shutil.copy(path + "\\" + file_name, "TASK.txt")
 
     try:
 
-        with open("TASK.txt", "rt", encoding="utf-8") as f: plain = f.read().replace("\n", "`")
+        with open("TASK.txt", "rt") as f: plain = f.read().replace("\n", "`")
 
     except UnicodeDecodeError:
 
-        with open("TASK.txt", "rt") as f: plain = f.read().replace("\n", "`")
+        try:
+
+            with open("TASK.txt", "rt", encoding="utf-8") as f: plain = f.read().replace("\n", "`")
+
+        except UnicodeDecodeError: print("ERROR FILE : " + file_name); return
 
     os.remove(r"TASK.txt")
 
-    if path[0] == ".": path = path[path.rindex("/") + 1:]
-
-    name, ext = os.path.splitext(path)
+    name, ext = os.path.splitext(file_name)
 
     name, ext, plain = name + "?", ext + "?", plain + "?"
 
@@ -103,7 +106,7 @@ def handle_plain(path: str):
     return tuple(data.values())
 
 
-def encrypt_process(plain: str, name_ext: tuple, file_name):
+def encrypt_process(plain: str, name_ext: tuple, file_name: str, path: str):
 
     get_rand = lambda set=randint(0, 255), i=0: tuple((set if j == i else randint(0, 255) for j in range(3)))
 
@@ -141,45 +144,57 @@ def encrypt_process(plain: str, name_ext: tuple, file_name):
 
                 else: raise IncorrectSizingError
 
-    img_board.save(file_name + ".bmp")
+    img_board.save(path + "\\" + file_name + ".bmp")
 
 
-def question(ques: str, cond: tuple):
+def question(ques: str, cond):
 
     while True:
 
         scan = input(ques)
 
-        if scan in cond:
-
-            print()
-
-            return scan
+        if cond(scan): print(); return scan
 
         print("Please enter a valid value.\n")
 
 
-def singular(file_name, OorR: str, file_tuple: tuple):
+def singular(file_name, OorR: str, file_tuple: tuple = None):
 
-    Range = [chr(i) for i in list(range(65, 91)) + list(range(97, 123))] + \
-            ["~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";"]
+    Range = [chr(i) for i in list(range(65, 91)) + list(range(97, 123))] + ["~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";"]
 
-    try: file_name = file_tuple[int(file_name)]
+    if file_tuple and file_name.isdecimal(): file_name = file_tuple[int(file_name)]
 
-    except ValueError: pass
+    path, file_name = os.path.split(file_name)
 
-    plain, name, ext = handle_plain(file_name)
+    if not path: path = "./" + path
 
-    will = name if OorR == "O" else "".join(sample(Range, randint(4, 10)))
+    temp_hp = handle_plain(file_name, path)
 
-    print(f"{file_name} -> {will}.bmp")
+    if temp_hp:
 
-    encrypt_process(plain, (name, ext), will)
+        plain, name, ext = temp_hp[0], temp_hp[1], temp_hp[2]
+
+        will = name if OorR == "O" else "".join(sample(Range, randint(4, 10)))
+
+        print(f"{file_name} -> {will}.bmp")
+
+        encrypt_process(plain, (name, ext), will, path)
 
 
-def file_tuple(listdir):
+def plural(path: str, OorR: str, ext_t: tuple):
 
-    file_tuple = tuple((v for v in listdir if os.path.isfile(v)))
+    for p, _, fs in os.walk(path):
+
+        print(p, fs)
+
+        if not os.access(path, os.X_OK): return
+
+        tuple(map(lambda v: singular(os.path.join(p, v), OorR), (v for v in fs if os.path.splitext(v)[1] in ext_t)))
+
+
+def file_tuple():
+
+    file_tuple = tuple((v for v in os.listdir(".") if os.path.isfile(v)))
 
     print(f"\n{' List Of Files In The Current Directory ':=^61}\n")
 
@@ -193,13 +208,27 @@ def file_tuple(listdir):
 if __name__ == '__main__':
 
     KR_DICT = kr_dict()
-    listdir = os.listdir(".")
 
     print(f"\n{'[ENCRYPTION]':^61}")
 
-    file_tuple = file_tuple(listdir)
+    want2plural = question("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ", lambda x: x in ("Y", "N"))
 
-    singular(question("file name(or number) : ", file_tuple + tuple((str(i) for i in range(len(file_tuple))))),
-             question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", ("O", "R")), file_tuple)
+    naming = question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
+
+    if want2plural == "Y":
+
+        path = question("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
+
+        ext_t = question("Enter the extension you want to encrypt.\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
+
+        plural(path, naming, tuple(ext_t))
+
+    else:
+
+        file_tuple = file_tuple()
+
+        file_sig = question("file name(or number) : ", lambda x: x in file_tuple + tuple((str(i) for i in range(len(file_tuple)))))
+
+        singular(file_sig , naming , file_tuple)
 
     input('\nSuccessfully.\n\nIf you want to quit, press any button. ')
