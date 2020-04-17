@@ -1,8 +1,22 @@
+from inspect import getabsfile, currentframe
 from random import randint, sample
 from PIL import Image
 import shutil
 import hgtk
 import os
+
+j_and_m = (
+    ('ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ',
+     'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', ''),  # 20
+    ('ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ',
+     'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ',
+     'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ', ''),  # 22
+    ('ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ',
+     'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ',
+     'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '')  # 28
+)
+
+KR_DICT = tuple(({j_and_m[i][j]: j for j in range(len(j_and_m[i]))} for i in range(3)))
 
 
 class IncorrectSizingError(Exception):
@@ -33,25 +47,7 @@ def build_size(plain: str, length: int, length_name: int):
     return plain, aliquot[-1] + 1, length // aliquot[-1] + 2
 
 
-def kr_dict():
-
-    j_and_m = (
-        ('ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ','ㅅ',
-         'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', ''), #20
-        ('ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ',
-         'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ',
-         'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ', ''), #22
-        ('ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ',
-         'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ',
-         'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '') #28
-    )
-
-    return tuple(({j_and_m[i][j] : j for j in range(len(j_and_m[i]))} for i in range(3)))
-
-
 def kr_encrypt(char: str):
-
-    global KR_DICT
 
     Range = ((11, 21), (10, 23), (7, 29))
 
@@ -158,7 +154,7 @@ def question(ques: str, cond):
         print("Please enter a valid value.\n")
 
 
-def singular(file_name, OorR: str, file_tuple: tuple = None):
+def singular(file_name, OorR: str, DorP: str, file_tuple: tuple = None):
 
     Range = [chr(i) for i in list(range(65, 91)) + list(range(97, 123))] + ["~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";"]
 
@@ -166,7 +162,7 @@ def singular(file_name, OorR: str, file_tuple: tuple = None):
 
     path, file_name = os.path.split(file_name)
 
-    if not path: path = "./" + path
+    if not path: path = "./"
 
     temp_hp = handle_plain(file_name, path)
 
@@ -180,21 +176,18 @@ def singular(file_name, OorR: str, file_tuple: tuple = None):
 
         encrypt_process(plain, (name, ext), will, path)
 
+    if DorP == "D": os.remove(rf"{path}\\{file_name}")
 
-def plural(path: str, OorR: str, ext_t: tuple):
 
-    for p, _, fs in os.walk(path):
+def plural(path: str, OorR: str, DorP: str, ext_t: tuple):
 
-        print(p, fs)
-
-        if not os.access(path, os.X_OK): return
-
-        tuple(map(lambda v: singular(os.path.join(p, v), OorR), (v for v in fs if os.path.splitext(v)[1] in ext_t)))
+    tuple(singular(os.path.join(p, v), OorR, DorP) for p, _, fs in os.walk(path) if os.access(p, os.X_OK)
+          for v in fs if os.path.splitext(v)[1] in ext_t and v != getabsfile(currentframe()))
 
 
 def file_tuple():
 
-    file_tuple = tuple((v for v in os.listdir(".") if os.path.isfile(v)))
+    file_tuple = tuple(v for v in os.listdir(".") if os.path.isfile(v))
 
     print(f"\n{' List Of Files In The Current Directory ':=^61}\n")
 
@@ -207,28 +200,28 @@ def file_tuple():
 
 if __name__ == '__main__':
 
-    KR_DICT = kr_dict()
-
     print(f"\n{'[ENCRYPTION]':^61}")
 
     want2plural = question("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ", lambda x: x in ("Y", "N"))
 
     naming = question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
 
+    del_preserve = question("What about the remaining bitmap file after encoding?\n[D]elete OR [P]reserve : ", lambda x: x in ("D", "P"))
+
     if want2plural == "Y":
 
         path = question("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
 
-        ext_t = question("Enter the extension you want to encrypt.\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
+        ext_t = question("Enter the extension you want to encrypt(e.g. .txt .py).\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
 
-        plural(path, naming, tuple(ext_t))
+        plural(path, naming, del_preserve, tuple(ext_t))
 
     else:
 
         file_tuple = file_tuple()
 
-        file_sig = question("file name(or number) : ", lambda x: x in file_tuple + tuple((str(i) for i in range(len(file_tuple)))))
+        file_sig = question("file name(or number) : ", lambda x: x in file_tuple + tuple(str(i) for i in range(len(file_tuple))))
 
-        singular(file_sig , naming , file_tuple)
+        singular(file_sig , naming, del_preserve, file_tuple)
 
     input('\nSuccessfully.\n\nIf you want to quit, press any button. ')

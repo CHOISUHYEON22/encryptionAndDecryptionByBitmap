@@ -72,7 +72,17 @@ def decrypt_process(i_name: str, path: str):
 
     result_name = name_ext[0][0] + name_ext[1][0]
 
-    if result_name in os.listdir(path): result_name =  i_name[:-4] + name_ext[1][0]
+    if result_name in os.listdir(path):
+
+        result_name =  i_name[:-4] + name_ext[1][0]
+
+        if is_not_printed:
+
+            print("\nA file that matches both the name and extension\n"
+                  "of the decryption target exists in this folder.\n"
+                  "Decryption will proceed with the name of the encryption file.\n")
+
+            globals()['is_not_printed'] = False
 
     os.rename(abs_temp_dir, os.path.join(path, result_name))
 
@@ -99,14 +109,6 @@ def singular(i_name, DorP, file_tuple: tuple = None):
     if not path: path = "./"
 
     will = decrypt_process(i_name, path)
-
-    if will[:will.rindex(".")] == i_name[:i_name.rindex(".")] and is_not_printed:
-
-        print("\nA file that matches both the name and extension\n"
-              "of the decryption target exists in this folder.\n"
-              "Decryption will proceed with the name of the encryption file.\n")
-
-        globals()['is_not_printed'] = False
 
     print(f"{i_name} -> {will}")
 
