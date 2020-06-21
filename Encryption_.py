@@ -1,11 +1,13 @@
 from inspect import getabsfile, currentframe
+from Clojure_fn import drop_while, partition_by
 from random import randint, sample
+from functools import reduce
 from PIL import Image
 import shutil
 import hgtk
 import os
 
-j_and_m = (
+J_AND_M = (
     ('ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ',
      'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', ''),  # 20
     ('ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ',
@@ -16,7 +18,7 @@ j_and_m = (
      'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ', '')  # 28
 )
 
-KR_DICT = tuple(({j_and_m[i][j]: j for j in range(len(j_and_m[i]))} for i in range(3)))
+KR_DICT = tuple(({J_AND_M[i][j]: j for j in range(len(J_AND_M[i]))} for i in range(3)))
 
 
 class IncorrectSizingError(Exception):
@@ -26,202 +28,169 @@ class IncorrectSizingError(Exception):
     def __str__(self): return self.msg
 
 
-def build_size(plain: str, length: int, length_name: int):
-
-    while True:
-
-        try:
-
-            aliquot = [i for i in range(1, int(length**0.5) + 1) if length % i == 0]
-
-            if len(aliquot) < 2 or aliquot[-1] <= length_name: raise Warning
-
-            for i in range(aliquot[-1] - 1, length - 1, aliquot[-1]):
-
-                if plain[i] in ("$", "뺊") and plain[i] == plain[i + 1]: raise Warning
-
-            else: break
-
-        except Warning: plain, length = plain + "@", length + 1
-
-    return plain, aliquot[-1] + 1, length // aliquot[-1] + 2
+def get_rand(set=randint(0, 255), i=0): return tuple(set if j == i else randint(0, 255) for j in range(3))
 
 
-def kr_encrypt(char: str):
-
-    Range = ((11, 21), (10, 23), (7, 29))
-
-    char_tuple = hgtk.letter.decompose(char)
-
-    return tuple((randint(1, Range[i][0]) * Range[i][1] + KR_DICT[i][char_tuple[i]] for i in range(3)))
+def pl_iter(*args): return reduce(lambda s, i: s + i, map(tuple, args))
 
 
-def en_encrypt(char: str): return randint(0, 1) * 128 + ord(char)
+def build_size(PLAIN: str, LENGTH: int, LENGTH_NAME: int):
+
+    ALIQUOT = tuple(i for i in range(1, int(LENGTH ** 0.5) + 1) if LENGTH % i == 0)
+
+    if len(ALIQUOT) < 2 or ALIQUOT[-1] <= LENGTH_NAME: return build_size(PLAIN + "@", LENGTH + 1, LENGTH_NAME)
+
+    ENDL_RANGE = range(ALIQUOT[-1] - 1, LENGTH - 1, ALIQUOT[-1])
+
+    if len(drop_while(lambda x: PLAIN[x] not in ("$", "뺊") or PLAIN[x] != PLAIN[x + 1], tuple(ENDL_RANGE))) != len(ENDL_RANGE):
+
+        return build_size(PLAIN + "@", LENGTH + 1, LENGTH_NAME)
+
+    return PLAIN, ALIQUOT[-1] + 1, LENGTH // ALIQUOT[-1] + 2
 
 
-def handle_plain(file_name: str, path: str):
+def kr_encrypt(CHAR: str):
 
-    shutil.copy(path + "\\" + file_name, "TASK.txt")
+    RANGE = ((11, 21), (10, 23), (7, 29))
+
+    if not CHAR: return get_rand()
+
+    CHAR_TUPLE = hgtk.letter.decompose(CHAR)
+
+    return tuple((randint(1, RANGE[i][0]) * RANGE[i][1] + KR_DICT[i][CHAR_TUPLE[i]] for i in range(3)))
+
+
+def en_encrypt(CHAR: str): return randint(0, 1) * 128 + ord(CHAR)
+
+
+def handle_plain(FILE_NAME: str, PATH: str):
+
+    shutil.copy(PATH + "\\" + FILE_NAME, "TASK.txt")
 
     try:
 
-        with open("TASK.txt", "rt") as f: plain = f.read().replace("\n", "`")
+        with open("TASK.txt", "rt") as f: PLAIN = f.read().replace("\n", "`") + "?"
 
     except UnicodeDecodeError:
 
         try:
 
-            with open("TASK.txt", "rt", encoding="utf-8") as f: plain = f.read().replace("\n", "`")
+            with open("TASK.txt", "rt", encoding="utf-8") as f: PLAIN = f.read().replace("\n", "`") + "?"
 
-        except UnicodeDecodeError: print("ERROR FILE : " + file_name); return
+        except UnicodeDecodeError: print("ERROR FILE : " + FILE_NAME); return
 
     os.remove(r"TASK.txt")
 
-    name, ext = os.path.splitext(file_name)
+    NAME, EXT = (i + "?" for i in os.path.splitext(FILE_NAME))
 
-    name, ext, plain = name + "?", ext + "?", plain + "?"
-
-    data = {"plain" : plain, "name" : name, "ext" : ext}
-
-    insert_str = lambda index: v[:index] + ("뺊뺊" if kr_ing else "$$") + v[index:]
-
-    for k in data.keys():
-
-        count, kr_ing, v = 0, False, data[k]
-
-        for i, u in enumerate(data[k]):
-
-            if (not u.isascii() and not kr_ing) or (u.isascii() and kr_ing):
-
-                v, kr_ing, count = insert_str(i + 2 * count), not kr_ing, count + 1
-
-        if kr_ing: v += "뺊뺊"
-
-        data[k] = v
-
-    return tuple(data.values())
+    return tuple(''.join(map(lambda x: x if x.isascii() else f"$${x}뺊뺊", map(lambda x: ''.join(x), partition_by(lambda x: x.isascii(), i)))) for i in (PLAIN, NAME, EXT))
 
 
-def encrypt_process(plain: str, name_ext: tuple, file_name: str, path: str):
+def encrypt_process(RAW_PLAIN: str, name_ext: tuple, file_name: str, path: str):
 
-    get_rand = lambda set=randint(0, 255), i=0: tuple((set if j == i else randint(0, 255) for j in range(3)))
+    index = lambda: (WIDTH - 1) * i + j - 1
 
-    index = lambda : (width - 1) * (i - 2) + j - 1
+    PLAIN, WIDTH, HEIGHT = build_size(RAW_PLAIN, len(RAW_PLAIN), len(name_ext[0]))
 
-    plain, width, height = build_size(plain, len(plain), len(name_ext[0]))
+    IMG_BOARD = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
 
-    img_board = Image.new("RGB", (width, height), (255, 255, 255))
+    IMG = IMG_BOARD.load()
 
-    img = img_board.load()
+    NA_EXT_PL = tuple(reduce(lambda s, i: s + i, (tuple(name_ext[i]) + tuple("" for l in range(WIDTH - 1 - len(name_ext[i]))) for i in range(2)))) + tuple(PLAIN)
 
-    kr_ing = False
+    CRITERIA = tuple(randint(0, 2) for l in range(HEIGHT))
 
-    for i in range(height):
+    for i in range(HEIGHT):
 
-        criteria = randint(0, 2)
+        for j in range(WIDTH):
 
-        img[0, i] = get_rand(randint(1, 84) * 3 + criteria)
+            if j == 0: IMG[j, i] = get_rand(randint(1, 84) * 3 + CRITERIA[i])
 
-        for j in range(1, width):
+            else:
 
-            isOpen = i in range(2)
+                TEXT = NA_EXT_PL[index()]
 
-            try:
+                IMG[j, i] = get_rand(en_encrypt(TEXT), CRITERIA[i]) if TEXT and TEXT.isascii() else kr_encrypt(TEXT)
 
-                data, data_1 = (name_ext[i][j - 1], name_ext[i][j - 2]) if isOpen else (plain[index()], plain[index() - 1])
-
-                img[j, i] = kr_encrypt(data) if kr_ing else get_rand(en_encrypt(data), criteria)
-
-                if data in ("$", "뺊") and data == data_1: kr_ing = not kr_ing
-
-            except IndexError:
-
-                if isOpen: img[j, i] = get_rand()
-
-                else: raise IncorrectSizingError
-
-    img_board.save(path + "\\" + file_name + ".bmp")
+    IMG_BOARD.save(path + "\\" + file_name + ".bmp")
 
 
-def question(ques: str, cond):
+def input_proc(QUES: str, COND = lambda X: X in ('Y', 'N'), RAISE_ERROR: bool = False):
 
-    while True:
+    if RAISE_ERROR: print("Please enter a valid value.\n")
 
-        scan = input(ques)
+    INPUT = input(QUES).replace("\\", "\\")
 
-        if cond(scan): print(); return scan
+    try: return INPUT if COND(INPUT) else input_proc(QUES, COND, True)
 
-        print("Please enter a valid value.\n")
-
-
-def singular(file_name, OorR: str, DorP: str, file_tuple: tuple = None):
-
-    Range = [chr(i) for i in list(range(65, 91)) + list(range(97, 123))] + ["~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";"]
-
-    if file_tuple and file_name.isdecimal(): file_name = file_tuple[int(file_name)]
-
-    path, file_name = os.path.split(file_name)
-
-    if not path: path = "./"
-
-    temp_hp = handle_plain(file_name, path)
-
-    if temp_hp:
-
-        plain, name, ext = temp_hp[0], temp_hp[1], temp_hp[2]
-
-        will = name if OorR == "O" else "".join(sample(Range, randint(4, 10)))
-
-        print(f"{file_name} -> {will}.bmp")
-
-        encrypt_process(plain, (name, ext), will, path)
-
-    if DorP == "D": os.remove(rf"{path}\\{file_name}")
+    except (FileNotFoundError, OSError): return input_proc(QUES, COND, True)
 
 
-def plural(path: str, OorR: str, DorP: str, ext_t: tuple):
+def singular(FILE_PATH, O_R: str, D_P: str, FILE_TUPLE: tuple = None):
 
-    tuple(singular(os.path.join(p, v), OorR, DorP) for p, _, fs in os.walk(path) if os.access(p, os.X_OK)
-          for v in fs if os.path.splitext(v)[1] in ext_t and v != getabsfile(currentframe()))
+    RANGE = tuple(chr(i) for i in pl_iter(range(65, 91), range(97, 123))) + ("~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";")
+
+    POSSIBLE_PATH, FILE_NAME = os.path.split(FILE_TUPLE[int(FILE_PATH)] if FILE_TUPLE and FILE_PATH.isdecimal() else FILE_PATH)
+
+    PATH = POSSIBLE_PATH if POSSIBLE_PATH else "./"
+
+    TEMP_HP = handle_plain(FILE_NAME, PATH)
+
+    input("DEBUG : ") # debug
+
+    if TEMP_HP:
+
+        PLAIN, NAME, EXT = TEMP_HP[0], TEMP_HP[1], TEMP_HP[2]
+
+        WILL = NAME if O_R == "O" else "".join(sample(RANGE, randint(4, 10)))
+
+        print(f"{FILE_NAME} -> {WILL}.bmp")
+
+        encrypt_process(PLAIN, (NAME, EXT), WILL, PATH)
+
+    if D_P == "D": os.remove(rf"{PATH}\\{FILE_NAME}")
+
+
+def plural(PATH: str, O_R: str, D_P: str, EXT_T: tuple):
+
+    set(singular(os.path.join(p, v), O_R, D_P) for p, _, fs in os.walk(PATH) if os.access(p, os.X_OK) for v in fs if os.path.splitext(v)[1] in EXT_T and v != getabsfile(currentframe()))
 
 
 def file_tuple():
 
-    file_tuple = tuple(v for v in os.listdir(".") if os.path.isfile(v))
+    FILE_TUPLE = tuple(v for v in os.listdir(".") if os.path.isfile(v))
 
-    print(f"\n{' List Of Files In The Current Directory ':=^61}\n")
+    print(f"\n{' List Of Files In The Current Directory ':=^61}",
+          reduce(lambda s, i: s + f"  [{i[0]:0>3}] : {i[1]}\n", enumerate(FILE_TUPLE), ""),
+          f"{' END ':=^61}\n", sep="\n")
 
-    for i, v in enumerate(file_tuple): print(f"  [{i:0>3}] : {v}")
-
-    print(f"\n{' END ':=^61}\n")
-
-    return file_tuple
+    return FILE_TUPLE
 
 
 if __name__ == '__main__':
 
     print(f"\n{'[ENCRYPTION]':^61}")
 
-    want2plural = question("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ", lambda x: x in ("Y", "N"))
+    WANT2PLURAL = input_proc("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ")
 
-    naming = question("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
+    NAMING = input_proc("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
 
-    del_preserve = question("What about the remaining bitmap file after encoding?\n[D]elete OR [P]reserve : ", lambda x: x in ("D", "P"))
+    DEL_PRESERVE = input_proc("What about the remaining bitmap file after encoding?\n[D]elete OR [P]reserve : ", lambda x: x in ("D", "P"))
 
-    if want2plural == "Y":
+    if WANT2PLURAL == "Y":
 
-        path = question("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
+        PATH = input_proc("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
 
-        ext_t = question("Enter the extension you want to encrypt(e.g. .txt .py).\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
+        EXT_T = input_proc("Enter the extension you want to encrypt(e.g. .txt .py).\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
 
-        plural(path, naming, del_preserve, tuple(ext_t))
+        plural(PATH, NAMING, DEL_PRESERVE, tuple(EXT_T))
 
     else:
 
-        file_tuple = file_tuple()
+        FILE_TUPLE = file_tuple()
 
-        file_sig = question("file name(or number) : ", lambda x: x in file_tuple + tuple(str(i) for i in range(len(file_tuple))))
+        FILE_SIG = input_proc("file name(or number) : ", lambda x: x in FILE_TUPLE + tuple(str(i) for i in range(len(FILE_TUPLE))))
 
-        singular(file_sig , naming, del_preserve, file_tuple)
+        singular(FILE_SIG, NAMING, DEL_PRESERVE, FILE_TUPLE)
 
     input('\nSuccessfully.\n\nIf you want to quit, press any button. ')
