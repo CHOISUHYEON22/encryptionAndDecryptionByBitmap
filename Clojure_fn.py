@@ -1,20 +1,29 @@
-def drop_while(F, COLL):
+def drop_while(fn, coll):
 
     if __name__ == 'Clojure_fn':
 
-        TF_TUPLE = tuple(map(F, COLL))
+        TF_TUPLE = tuple(map(fn, coll))
 
-        return COLL[:TF_TUPLE.index(False)] if False in TF_TUPLE else COLL
+        return coll[:TF_TUPLE.index(False)] if False in TF_TUPLE else coll
 
 
-def partition_by(F, COLL):
+def partition_by(fn, coll):
 
     if __name__ == 'Clojure_fn':
 
-        if not COLL: return ()
+        if not coll: return ()
 
-        FST = COLL[0]
+        FST = coll[0]
 
-        RUN = (FST,) + tuple(drop_while(lambda x: F(FST) == F(x), COLL[1:]))
+        RUN = (FST,) + tuple(drop_while(lambda x: fn(FST) == fn(x), coll[1:]))
 
-        return (RUN,) + partition_by(F, COLL[len(RUN):])
+        return (RUN,) + partition_by(fn, coll[len(RUN):])
+
+
+def partition_num(num: int, contain_all: bool, coll):
+
+    if not coll: return ()
+
+    if len(coll) < num: return (coll, ) if contain_all else ()
+
+    return (coll[:num], ) + partition_num(num, contain_all, coll[num:])

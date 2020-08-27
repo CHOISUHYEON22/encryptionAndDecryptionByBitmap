@@ -1,10 +1,12 @@
 from inspect import getabsfile, currentframe
-from Clojure_fn import drop_while, partition_by
+from Clojure_fn import drop_while, partition_by, partition_num
 from random import randint, sample
+from collections import namedtuple
 from functools import reduce
 from PIL import Image
 import shutil
 import hgtk
+import sys
 import os
 
 J_AND_M = (
@@ -28,169 +30,214 @@ class IncorrectSizingError(Exception):
     def __str__(self): return self.msg
 
 
-def get_rand(set=randint(0, 255), i=0): return tuple(set if j == i else randint(0, 255) for j in range(3))
+def get_rand_rgb(set, i=0) -> tuple: return tuple(set if j == i else randint(0, 255) for j in range(3))
 
 
-def pl_iter(*args): return reduce(lambda s, i: s + i, map(tuple, args))
+def pl_iter(*args) -> iter: return reduce(lambda s, i: s + i, map(tuple, args))
 
 
-def build_size(PLAIN: str, LENGTH: int, LENGTH_NAME: int):
+def build_size(plain: str, length: int, length_of_name: int) -> tuple:
 
-    ALIQUOT = tuple(i for i in range(1, int(LENGTH ** 0.5) + 1) if LENGTH % i == 0)
+    aliquot = tuple(i for i in range(1, int(length ** 0.5) + 1) if length % i == 0)
 
-    if len(ALIQUOT) < 2 or ALIQUOT[-1] <= LENGTH_NAME: return build_size(PLAIN + "@", LENGTH + 1, LENGTH_NAME)
+    if len(aliquot) < 2 or aliquot[-1] <= length_of_name: return build_size(plain + "@", length + 1, length_of_name)
 
-    ENDL_RANGE = range(ALIQUOT[-1] - 1, LENGTH - 1, ALIQUOT[-1])
+    endl_range = range(aliquot[-1] - 1, length - 1, aliquot[-1])
 
-    if len(drop_while(lambda x: PLAIN[x] not in ("$", "뺊") or PLAIN[x] != PLAIN[x + 1], tuple(ENDL_RANGE))) != len(ENDL_RANGE):
+    if len(drop_while(lambda x: plain[x] not in ("$", "뺊") or plain[x] != plain[x + 1], tuple(endl_range))) != len(endl_range):
 
-        return build_size(PLAIN + "@", LENGTH + 1, LENGTH_NAME)
+        return build_size(plain + "@", length + 1, length_of_name)
 
-    return PLAIN, ALIQUOT[-1] + 1, LENGTH // ALIQUOT[-1] + 2
-
-
-def kr_encrypt(CHAR: str):
-
-    RANGE = ((11, 21), (10, 23), (7, 29))
-
-    if not CHAR: return get_rand()
-
-    CHAR_TUPLE = hgtk.letter.decompose(CHAR)
-
-    return tuple((randint(1, RANGE[i][0]) * RANGE[i][1] + KR_DICT[i][CHAR_TUPLE[i]] for i in range(3)))
+    return plain, aliquot[-1] + 1, length // aliquot[-1] + 2
 
 
-def en_encrypt(CHAR: str): return randint(0, 1) * 128 + ord(CHAR)
+def kr_encrypt(char: str) -> tuple:
+
+    if not char: return get_rand_rgb(randint(0, 255))  # 처리 필요
+
+    const_of_encrypt_formula = namedtuple('const_of_encrypt_formula', 'max_num_for_under_255 num_of_each_syllables_pl_1')
+
+    const_gathering = tuple(const_of_encrypt_formula(i, j) for i, j in ((11, 21), (10, 23), (7, 29)))
+
+    char_tuple = hgtk.letter.decompose(char)
+
+    return tuple(randint(1, const_gathering[i][0]) * const_gathering[i][1] + KR_DICT[i][char_tuple[i]] for i in range(3))
 
 
-def handle_plain(FILE_NAME: str, PATH: str):
+def en_encrypt(char: str, criteria: int) -> tuple: return get_rand_rgb(randint(0, 1) * 128 + ord(char), criteria)
 
-    shutil.copy(PATH + "\\" + FILE_NAME, "TASK.txt")
 
-    try:
+def handle_plain(file_name: str, path: str) -> iter:
 
-        with open("TASK.txt", "rt") as f: PLAIN = f.read().replace("\n", "`") + "?"
-
-    except UnicodeDecodeError:
+    def get_plain(encoding = None):
 
         try:
 
-            with open("TASK.txt", "rt", encoding="utf-8") as f: PLAIN = f.read().replace("\n", "`") + "?"
+            with open("TASK.txt", "rt", encoding=encoding) as f:
 
-        except UnicodeDecodeError: print("ERROR FILE : " + FILE_NAME); return
+                return f.read().replace("\n", "`") + "?"
+
+        except UnicodeDecodeError: return None if encoding else get_plain("utf-8")
+
+    shutil.copy(path + "\\" + file_name, "TASK.txt")
+
+    plain = get_plain()
+
+    if not plain: print("ERROR FILE : " + file_name); return
 
     os.remove(r"TASK.txt")
 
-    NAME, EXT = (i + "?" for i in os.path.splitext(FILE_NAME))
+    name, ext = (i + "?" for i in os.path.splitext(file_name))
 
-    return tuple(''.join(map(lambda x: x if x.isascii() else f"$${x}뺊뺊", map(lambda x: ''.join(x), partition_by(lambda x: x.isascii(), i)))) for i in (PLAIN, NAME, EXT))
-
-
-def encrypt_process(RAW_PLAIN: str, name_ext: tuple, file_name: str, path: str):
-
-    index = lambda: (WIDTH - 1) * i + j - 1
-
-    PLAIN, WIDTH, HEIGHT = build_size(RAW_PLAIN, len(RAW_PLAIN), len(name_ext[0]))
-
-    IMG_BOARD = Image.new("RGB", (WIDTH, HEIGHT), (255, 255, 255))
-
-    IMG = IMG_BOARD.load()
-
-    NA_EXT_PL = tuple(reduce(lambda s, i: s + i, (tuple(name_ext[i]) + tuple("" for l in range(WIDTH - 1 - len(name_ext[i]))) for i in range(2)))) + tuple(PLAIN)
-
-    CRITERIA = tuple(randint(0, 2) for l in range(HEIGHT))
-
-    for i in range(HEIGHT):
-
-        for j in range(WIDTH):
-
-            if j == 0: IMG[j, i] = get_rand(randint(1, 84) * 3 + CRITERIA[i])
-
-            else:
-
-                TEXT = NA_EXT_PL[index()]
-
-                IMG[j, i] = get_rand(en_encrypt(TEXT), CRITERIA[i]) if TEXT and TEXT.isascii() else kr_encrypt(TEXT)
-
-    IMG_BOARD.save(path + "\\" + file_name + ".bmp")
+    return ("".join((j if j.isascii() else f"$${j}뺊뺊" for j in (''.join(k) for k in partition_by(lambda x: x.isascii(), i)))) for i in (plain, name, ext))
 
 
-def input_proc(QUES: str, COND = lambda X: X in ('Y', 'N'), RAISE_ERROR: bool = False):
+def build_key_once(width: int, height: int, path: str, file_name: str):
 
-    if RAISE_ERROR: print("Please enter a valid value.\n")
+    img_board = Image.new("RGB", (width, height), (255, 255, 255))
 
-    INPUT = input(QUES).replace("\\", "\\")
+    img = img_board.load()
 
-    try: return INPUT if COND(INPUT) else input_proc(QUES, COND, True)
+    key = tuple(tuple(get_rand_rgb(randint(0, 255)) for _ in range(width)) for _ in range(height))
 
-    except (FileNotFoundError, OSError): return input_proc(QUES, COND, True)
+    for h in range(height):
 
+        for w in range(width):
 
-def singular(FILE_PATH, O_R: str, D_P: str, FILE_TUPLE: tuple = None):
+            img[w, h] = key[h][w]
 
-    RANGE = tuple(chr(i) for i in pl_iter(range(65, 91), range(97, 123))) + ("~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";")
+    img_board.save(path + f"/{file_name}_key.bmp")
 
-    POSSIBLE_PATH, FILE_NAME = os.path.split(FILE_TUPLE[int(FILE_PATH)] if FILE_TUPLE and FILE_PATH.isdecimal() else FILE_PATH)
-
-    PATH = POSSIBLE_PATH if POSSIBLE_PATH else "./"
-
-    TEMP_HP = handle_plain(FILE_NAME, PATH)
-
-    input("DEBUG : ") # debug
-
-    if TEMP_HP:
-
-        PLAIN, NAME, EXT = TEMP_HP[0], TEMP_HP[1], TEMP_HP[2]
-
-        WILL = NAME if O_R == "O" else "".join(sample(RANGE, randint(4, 10)))
-
-        print(f"{FILE_NAME} -> {WILL}.bmp")
-
-        encrypt_process(PLAIN, (NAME, EXT), WILL, PATH)
-
-    if D_P == "D": os.remove(rf"{PATH}\\{FILE_NAME}")
+    return key
 
 
-def plural(PATH: str, O_R: str, D_P: str, EXT_T: tuple):
 
-    set(singular(os.path.join(p, v), O_R, D_P) for p, _, fs in os.walk(PATH) if os.access(p, os.X_OK) for v in fs if os.path.splitext(v)[1] in EXT_T and v != getabsfile(currentframe()))
+def encrypt_once(raw_plain: str, name_ext: tuple, file_name: str, path: str):
+
+    try: plain, width, height = build_size(raw_plain, len(raw_plain), len(name_ext[0]))
+
+    except RecursionError:
+
+        print("\nA recursive error occurred while calculating the size of the encryption file.\nPlease allow more memory.")
+
+        return False
+
+    key = build_key_once(width, height, path, file_name)
+
+    img_board = Image.new("RGB", (width, height), (255, 255, 255))
+
+    img = img_board.load()
+
+    criteria = tuple(randint(0, 2) for _ in range(height))
+
+    formulaic_na_ext_pl = tuple(name_ext[i] + " " * (width - 1 - len(name_ext[i])) for i in range(2)) + partition_num(width - 1, True, plain)
+
+    pre_encryption = tuple((get_rand_rgb(criteria[h]), ) + tuple(en_encrypt(t, criteria[h]) if t and t.isascii() else kr_encrypt(t) for t in w) for h, w in enumerate(formulaic_na_ext_pl))
+
+    encryption_result = tuple(tuple(tuple(pre_encryption[h][w][c] ^ key[h][w][c] for c in range(3)) for w in range(width)) for h in range(height))
+
+    for h in range(height):
+
+        for w in range(width):
+
+            img[w, h] = encryption_result[h][w]
+
+    img_board.save(path + "/" + file_name + ".bmp")
+
+    return True
+
+
+def input_proc(ques: str, cond = lambda X: X in ('Y', 'N'), raise_error: bool = False):
+
+    if raise_error: print("Please enter a valid value.\n")
+
+    input_data = input(ques).replace("\\", "\\")
+
+    try: return input_data if cond(input_data) else input_proc(ques, cond, True)
+
+    except (FileNotFoundError, OSError): return input_proc(ques, cond, True)
+
+
+def singular(file_path, original_rand: str, del_preserve: str, file_tuple: tuple = None):
+
+    possible_char_in_file_name = tuple(chr(i) for i in pl_iter(range(65, 91), range(97, 123))) + ("~", "!", "#", "_", "$", "^", "%", "(", ")", ".", ";")
+
+    possible_path, file_name = os.path.split(file_tuple[int(file_path)] if file_tuple and file_path.isdecimal() else file_path)
+
+    path = possible_path if possible_path else "."
+
+    try:
+
+        plain, name, ext = handle_plain(file_name, path)
+
+        will = name if original_rand == "O" else "".join(sample(possible_char_in_file_name, randint(4, 10)))
+
+        print(f"{file_name} -> {will}.bmp")
+
+        is_normal = encrypt_once(plain, (name, ext), will, path)
+
+        if is_normal and del_preserve == "D": os.remove(rf"{path}\\{file_name}")
+
+    except TypeError: pass
+
+
+def get_accessible_path_file(path: str, ext_t: tuple) -> iter:
+
+    return (os.path.join(p, f) for p, _, fs in os.walk(path) if os.access(p, os.X_OK) for f in fs if os.path.splitext(f)[1] in ext_t and f != getabsfile(currentframe()))
+
+
+def plural(accessible_path_file: iter, original_rand: str, del_preserve: str):
+
+    try:
+
+        singular(next(accessible_path_file), original_rand, del_preserve)
+
+        plural(accessible_path_file, original_rand, del_preserve)
+
+    except StopIteration: pass
 
 
 def file_tuple():
 
-    FILE_TUPLE = tuple(v for v in os.listdir(".") if os.path.isfile(v))
+    file_tuple = tuple(v for v in os.listdir(".") if os.path.isfile(v))
 
-    print(f"\n{' List Of Files In The Current Directory ':=^61}",
-          reduce(lambda s, i: s + f"  [{i[0]:0>3}] : {i[1]}\n", enumerate(FILE_TUPLE), ""),
-          f"{' END ':=^61}\n", sep="\n")
+    print(f"\n{' List Of Files In The Current Directory ':=^61}")
 
-    return FILE_TUPLE
+    print(reduce(lambda s, i: s + f"  [{i[0]:0>3}] : {i[1]}\n", enumerate(file_tuple), ""))
+
+    print(f"{' END ':=^61}")
+
+    return file_tuple
 
 
 if __name__ == '__main__':
 
     print(f"\n{'[ENCRYPTION]':^61}")
 
-    WANT2PLURAL = input_proc("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ")
+    want2plural = input_proc("Do you want to encrypt all the files in the folder you want and its subfolders?\n[Y]es OR [N]o : ")
 
-    NAMING = input_proc("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
+    naming = input_proc("What would you like to name the encrypted file?\n[O]riginal OR [R]andom : ", lambda x: x in ("O", "R"))
 
-    DEL_PRESERVE = input_proc("What about the remaining bitmap file after encoding?\n[D]elete OR [P]reserve : ", lambda x: x in ("D", "P"))
+    del_preserve = input_proc("What about the remaining bitmap file after encoding?\n[D]elete OR [P]reserve : ", lambda x: x in ("D", "P"))
 
-    if WANT2PLURAL == "Y":
+    max_recursion = input_proc("How much memory can you allocate (default is 1000 recursions)?\n : ", lambda x: x.isdecimal())
 
-        PATH = input_proc("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
+    sys.setrecursionlimit(int(max_recursion))
 
-        EXT_T = input_proc("Enter the extension you want to encrypt(e.g. .txt .py).\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
+    if want2plural == "Y":
 
-        plural(PATH, NAMING, DEL_PRESERVE, tuple(EXT_T))
+        path = input_proc("Enter the path of the folder you want to encrypt.\n : ", lambda x: os.path.isdir(x))
+
+        ext_t = input_proc("Enter the extension you want to encrypt(e.g. .txt .py).\n : ", lambda x: False not in map(lambda y: y[0] == ".", x.split(" "))).split(" ")
+
+        plural(get_accessible_path_file(path, tuple(ext_t)), naming, del_preserve)
 
     else:
 
-        FILE_TUPLE = file_tuple()
+        file_tuple = file_tuple()
 
-        FILE_SIG = input_proc("file name(or number) : ", lambda x: x in FILE_TUPLE + tuple(str(i) for i in range(len(FILE_TUPLE))))
+        file_sig = input_proc("file name(or number) : ", lambda x: x in file_tuple + tuple(str(i) for i in range(len(file_tuple))))
 
-        singular(FILE_SIG, NAMING, DEL_PRESERVE, FILE_TUPLE)
+        singular(file_sig, naming, del_preserve, file_tuple)
 
-    input('\nSuccessfully.\n\nIf you want to quit, press any button. ')
+    input('\n\nIf you want to quit, press any button. ')
